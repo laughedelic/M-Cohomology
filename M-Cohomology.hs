@@ -1,3 +1,4 @@
+
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
@@ -23,16 +24,18 @@ t  = r+1         -- ba = ab^t
 data G = Element Int Int 
          deriving Eq
 
+-- конструктор элементов с учётом порядка образующих
 element :: Int -> Int -> G
 element m n = Element (m `mod` 2) (n `mod` rr)
 
+-- умножение в группе с учётом её структуры
 (.*.) :: G -> G -> G
 (Element p l) .*. (Element 0 s) = element  p    (  l+s)
 (Element p l) .*. (Element 1 s) = element (p+1) (t*l+s)
 
-e' = Element 0 0
-a' = Element 1 0
-b' = Element 0 1
+e' = Element 0 0 :: G
+a' = Element 1 0 :: G
+b' = Element 0 1 :: G
 
 instance Ord G where
     (Element m1' n1') <= (Element m2' n2') = 
@@ -46,10 +49,11 @@ instance Show G where
     show (Element m 1) = take m "a" ++ "b"
     show (Element m n) = take m "a" ++ "b" ++ superscript n
 
-digit n = "⁰¹²³⁴⁵⁶⁷⁸⁹"!!(n `mod` 10)
+digit n = "⁰¹²³⁴⁵⁶⁷⁸⁹" !! (n `mod` 10)
 superscript n = let (n',k) = n `divMod` 10 
                 in (if n' > 0 then superscript n' else "") ++ [digit k]
 
+-- список элементов группы
 _G_ = [ Element m n | m <- [0,1], n <- [0 .. rr-1] ]
 
 ---------------------------------------------------------------------------
@@ -105,23 +109,23 @@ l = a*_L*a
 ar :: Int -> Int -> Int -> ZG
                                                                  
 ar 0 m n | m < 1 || n < 0 = 0
-        | odd  m         = b-1
-        | even m         = _Nb
+         | odd  m         = b-1
+         | even m         = _Nb
                                                                  
 ar 1 m n | m < 0  || n < 1  = 0
-        | even m && odd  n =   a*l^m' - 1
-        | even m && even n =   a*l^m' + 1 
-        where m' = (m `div` 2)
+         | even m && odd  n =   a*l^m' - 1
+         | even m && even n =   a*l^m' + 1 
+         where m' = (m `div` 2)
 ar 1 m n | odd  m && odd  n =  -a*l^m' + 1
-        | odd  m && even n =  -a*l^m' - 1
-        where m' = ((m+1) `div` 2)
+         | odd  m && even n =  -a*l^m' - 1
+         where m' = ((m+1) `div` 2)
                                                                  
 ar 2 m n | m < 0 || n < 2 = 0
-        | even m         = 0
-        | odd  m         = fromInteger $ -(t'^(2*m') - 1) `div` rr'
-        where m' = ((m+1) `div` 2)
-              t' = toInteger t
-              rr' = toInteger rr
+         | even m         = 0
+         | odd  m         = fromInteger $ -(t'^(2*m') - 1) `div` rr'
+         where m' = ((m+1) `div` 2)
+               t' = toInteger t
+               rr' = toInteger rr
                                                                  
 ar _ _ _ = 0
 
@@ -130,22 +134,18 @@ ar _ _ _ = 0
 --
 -- δ n : ZGⁿ⁺² → ZGⁿ⁺¹
 --
-delta' :: Int -> SparseMatrix ZG
-delta' n = fromAssocListWithSize (n+1,n+2)
+δ' :: Int -> SparseMatrix ZG
+δ' n = fromAssocListWithSize (n+1,n+2)
     [ ((i+1,j+1), d_ i j) | j <- [0 .. n+1] 
                           , i <- [0 .. n  ] ]
-            where d_ i j  = ar (i-j+1) j (n+1-j)
+            where d_ i j  = ar (i-j+1) j (n-j+1)
 
 -- ленивая мемоизация
-deltas = map delta' [0 .. ]
+deltas = map δ' [0 .. ]
 δ n = deltas !! n 
 
 -- проверка того, что δ² = 0
 checkdd k = isZeroMx (δ k × δ (k+1))
-
----------------------------------------------------------------------------
--- Применение Hom_ZG(–,Z) --
-----------------------------
 
 -- отображение пополнения
 ε :: ZG -> Z
@@ -176,9 +176,9 @@ coHom m = map fromPairs $
           : [ [(4*i, -(κ i)*(γ i)), (4*i+1, 1)] | i <- [1 .. k] ]
          ++ [ if p == 0 then [(m, -(γ (n+1)))          , (m+1, 2)]
                         else [(m, -(κ (k+1))*(γ (k+1))), (m+1, 1)] ]
+
        else -- l = 0, m = 2n+1
             [ [(2*i, -(κ i)), (2*i+1, t'-1)] | i <- [2,4 .. n] ]
-
     where (n,l) = (m-1) `divMod` 2
           (k,p) =  n    `divMod` 2
           fromPairs = foldl' vecIns (zeroVec (m+1))
@@ -220,8 +220,8 @@ rhs m = fmap (concatVec . fmap rhsCoeffs) $ fillMx $ trans m
 
 separate :: SparseVector Z -> SparseVector ZG
 separate (SV l z) = M.foldlWithKey' add (zeroVec (l `div` (2^k))) z
-    where add acc m x = let i = (m-1) `div`(2^k)+ 1
-                            j = (m-1) `mod` 2^k
+    where add acc m x = let i  = (m-1) `div`(2^k)+ 1
+                            j  = (m-1) `mod` 2^k
                             kg = x&(_G_!!j)
                         in acc `vecIns` (i, acc!i + kg)
 
@@ -262,11 +262,7 @@ checkAll ts = let k  = length ts - 1
 ----------------------
 
 vecDiv' v w = if isZeroVec u then 0 else snd $ M.findMin $ vec $ u
-    where u = vecDiv v w
-vecDiv = intersectVecsWith div
-vecMod = intersectVecsWith mod
-
--- несколько стадий cup-произведения:
+    where u = intersectVecsWith div v w
 
 -- по данному коциклу возвращает представитель соотв. когом. класса
 cl t = sum $ zipWith (\v k -> (k*)<$>v) basis $ lin t
@@ -277,8 +273,8 @@ cl t = sum $ zipWith (\v k -> (k*)<$>v) basis $ lin t
 lin t = zipWith mod (map (vecDiv' t) basis) (mods (dim t - 1))
     where basis = coHom (dim t - 1)
 
--- cup-произведение двух образующих соотв. групп когомологий
-(m,i) ‿ (n,j) | m <= n = cl $ (ε <$> (ττ m i 0) × (ττ n j m)) `row` 1
+-- cup-произведение i-й образующей m-й группы на j-ю образующую n-й группы
+(m,i) ‿ (n,j) | m <= n    = cl $ (ε <$> (ττ m i 0) × (ττ n j m)) `row` 1
               | otherwise = ((-1)^(m+n)*) <$> (n,j) ‿ (m,i)
 cup = (‿)
 
@@ -298,3 +294,4 @@ relations m n = putStrLn $ unlines
 
 -- представление образующих n-й группы через образующие меньшей степени
 representation n = sequence_ [ relations i (n-i) | i <- [1 .. n `div` 2] ]
+
