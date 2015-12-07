@@ -12,10 +12,10 @@ import qualified Data.IntMap as M
 import Math.LinearAlgebra.Sparse
 
 ---------------------------------------------------------------------------
--- Описание группы --
----------------------
+-- Group description --
+-----------------------
 
--- основные константы задачи
+-- main constants
 k  = 4           -- M_2^k
 r  = 2^(k-2)
 rr = 2*r         -- b^2r = 1
@@ -24,11 +24,11 @@ t  = r+1         -- ba = ab^t
 data G = Element Int Int 
          deriving Eq
 
--- конструктор элементов с учётом порядка образующих
+-- constructor of elements with respect to it's order
 element :: Int -> Int -> G
 element m n = Element (m `mod` 2) (n `mod` rr)
 
--- умножение в группе с учётом её структуры
+-- multiplication in group
 (.*.) :: G -> G -> G
 (Element p l) .*. (Element 0 s) = element  p    (  l+s)
 (Element p l) .*. (Element 1 s) = element (p+1) (t*l+s)
@@ -53,12 +53,12 @@ digit n = "⁰¹²³⁴⁵⁶⁷⁸⁹" !! (n `mod` 10)
 superscript n = let (n',k) = n `divMod` 10 
                 in (if n' > 0 then superscript n' else "") ++ [digit k]
 
--- список элементов группы
+-- list of group elements
 _G_ = [ Element m n | m <- [0,1], n <- [0 .. rr-1] ]
 
 ---------------------------------------------------------------------------
--- Построение групповой алгебры --
-----------------------------------
+-- Construction of group algebra --
+-----------------------------------
 
 instance (Eq k, Num k) => Algebra k G where
    -- unit :: k -> Vect k b
@@ -67,34 +67,35 @@ instance (Eq k, Num k) => Algebra k G where
    -- mult :: Vect k (Tensor b b) -> Vect k b
       mult (V vs) = nf $ V [(g.*.h, k) | ((g,h), k) <- vs ]
 
--- простой конструктор: коэффициент * элемент группы
+-- simple constructor: coefficient * group element
 (&) :: (Algebra k G) => k -> G -> Vect k G
 z&x = V [(x,z)]
 
 basis = map (1&) _G_
 
 type Z = Integer
--- целочисленная групповая алгебра
+-- integral group algebra
 type ZG = Vect Z G
 
--- образующие группы как элементы групповой алгебры
+-- group basis as elements of group algebra
 e = 1&e' :: ZG
 a = 1&a' :: ZG
 b = 1&b' :: ZG
 
--- из списка 2^k коэффициентов получить элемент гр.алгебры
+-- obtains an element of group algebra from a list of 2^k coefficients
 constr :: (Eq k, Num k, Algebra k G) => [k] -> Vect k G
 constr = nf . V . zip _G_
 
--- наоборот, получить список коэффициентов данного элемента
+-- opposite: gives element's coefficient list
 coeffs ::  Num k => Vect k G -> [k]
 coeffs (V x) = [ maybe 0 id (lookup g x) | g <- _G_ ]
 
+-- same as a sparse list
 sparseCoeffs = sparseList . coeffs
 
 ---------------------------------------------------------------------------
--- Описание дифференциалов резольвенты --
------------------------------------------
+-- Description of resolutions differentials --
+----------------------------------------------
 
 _Nb :: ZG
 _Nb = sum [ b^i | i <- [0 .. rr-1] ]
@@ -105,7 +106,7 @@ _L  = sum [ b^i | i <- [0 .. t-1] ]
 -- _L*a == a*l
 l = a*_L*a
 
--- стрелки специальной двумерной диаграммы (см. [Wall])
+-- arrows of the special two-dimentional diagram from [Wall]
 ar :: Int -> Int -> Int -> ZG
                                                                  
 ar 0 m n | m < 1 || n < 0 = 0
@@ -130,7 +131,7 @@ ar 2 m n | m < 0 || n < 2 = 0
 ar _ _ _ = 0
 
 
--- дифференциалы «тотализации»
+-- differentials of "totalisation"
 --
 -- δ n : ZGⁿ⁺² → ZGⁿ⁺¹
 --
@@ -140,18 +141,17 @@ ar _ _ _ = 0
                           , i <- [0 .. n  ] ]
             where d_ i j  = ar (i-j+1) j (n-j+1)
 
--- ленивая мемоизация
+-- lazy memoisation
 deltas = map δ' [0 .. ]
 δ n = deltas !! n 
 
--- проверка того, что δ² = 0
+-- checks that δ² = 0
 checkdd k = isZeroMx (δ k × δ (k+1))
 
--- отображение пополнения
 ε :: ZG -> Z
 ε (V ts) = sum (map snd ts)
 
--- дифференциалы комлекса Hom_ZG(ZGⁿ,Z) ≃ Zⁿ
+-- differentials of the Hom_ZG(ZGⁿ,Z) ≃ Zⁿ complex
 -- 
 -- dⁿ : Zⁿ⁺¹ → Zⁿ⁺²
 --
@@ -159,15 +159,15 @@ d :: Int -> SparseMatrix Z
 d = trans . fmap ε . δ
 
 ---------------------------------------------------------------------------
--- Описание групп когомологий Hⁿ(G,Z) --
-----------------------------------------
+-- Description of the Hⁿ(G,Z) cohomology groups --
+--------------------------------------------------
 
 t' = toInteger t
 κ k = (t'^k + 1) `div` 2
 γ k = (t'^k - 1) `div` (t'-1)
 
--- образующие групп когомологий
--- в виде наборов векторов
+-- cohomology groups generators
+-- as lists of vectors
 coHom :: Int -> [SparseVector Z]
 coHom 0 = [singVec 1]
 coHom m = map fromPairs $ 
@@ -183,15 +183,15 @@ coHom m = map fromPairs $
           (k,p) =  n    `divMod` 2
           fromPairs = foldl' vecIns (zeroVec (m+1))
 
--- то же самое в виде матриц
+-- same as sparse matrices
 coHomMx ::  Int -> SparseMatrix Z
 coHomMx = fromRows . coHom
 
--- j-я образующая i-й группы когомологий
+-- j-th generator of i-th cohomology group
 h :: Int -> Int -> SparseVector Z
 h i j = coHomMx i `row` j
 
--- порядки образующих в группе (коэффициенты соотношений)
+-- orders of groups generators (coefficients of relations)
 mods m = twos ++ (if l == 0 then [] 
                             else if p == 0 then [2,2^(k-2)] 
                                            else [2,2^(k-1)])
@@ -200,8 +200,8 @@ mods m = twos ++ (if l == 0 then []
           twos  = replicate ((m-1) `div` 4) 2
 
 ---------------------------------------------------------------------------
--- Решение уравнений в групповой алгебре --
--------------------------------------------
+-- Solving equations in the group algebra --
+--------------------------------------------
 
 xCoeffs :: ZG -> SparseMatrix Z
 xCoeffs x = trans $ sparseMx [ coeffs (x*g) | g <- basis ]
@@ -230,12 +230,12 @@ solveZGSystems m bs =
     trans $ fromRows $ fmap separate $ solveLinSystems (lhs m) (rhs bs)
 
 ---------------------------------------------------------------------------
--- Трансляции (подъёмы) --
---------------------------
+-- Translations (cocycles lifting) --
+-------------------------------------
 
 type Translation = SparseMatrix ZG
 
--- все трансляции данного коцикла
+-- all translations of given cocycle
 tr :: SparseVector Z -> [Translation]
 tr f = selfRec  -- ленивая мемоизация
       where k = dim f - 1
@@ -243,42 +243,43 @@ tr f = selfRec  -- ленивая мемоизация
             selfRec = t0 : (zipWith ttr [1 .. ] selfRec)
             ttr m prev = solveZGSystems (δ (m-1)) (prev × (δ (k+m-1)))
 
--- трансляции всех образующих всех групп когомологий
+-- translations of all generators of all cohomology groups
 tt :: [[[Translation]]]
 tt = map (map tr) $ map coHom [1 .. ]
 
--- k-я трансляция j-й образующей i-группы когомологий
+-- k-th translation of j-th generator of i-th cohomology group
 ττ :: Int -> Int -> Int -> Translation
 ττ i j k = tt !! (i-1) !! (j-1) !! k
 
--- проверка определяющих тождеств для набора трансляций
+-- check of the definition equations for translations set
 checkAll :: [Translation] -> [Bool]
 checkAll ts = let k  = length ts - 1
                   eq m t1 t0 = (δ (m-1)) × t1 == t0 × (δ (k+m-1))
               in zipWith3 eq [1 .. ] (tail ts) ts 
 
 ---------------------------------------------------------------------------
--- cup-произведение --
-----------------------
+-- cup-production --
+--------------------
 
 vecDiv' v w = if isZeroVec u then 0 else snd $ M.findMin $ vec $ u
     where u = intersectVecsWith div v w
 
--- по данному коциклу возвращает представитель соотв. когом. класса
+-- returns a representative of the cohomology class that 
+-- corresponds to the given cocycle
 cl t = sum $ zipWith (\v k -> (k*)<$>v) basis $ lin t
     where basis = coHom (dim t - 1)
 
--- представляет коцикл в виде линейной комбинации образующих соотв.
--- группы когомологий и её возвращает коэффициенты
+-- represents cocycle as a linear combination of generators of the
+-- corresponding cohomology group and returns it's coefficients list
 lin t = zipWith mod (map (vecDiv' t) basis) (mods (dim t - 1))
     where basis = coHom (dim t - 1)
 
--- cup-произведение i-й образующей m-й группы на j-ю образующую n-й группы
+-- cup-production of the i-th generator of m-th group by the j-th generator of n-th group
 (m,i) ‿ (n,j) | m <= n    = cl $ (ε <$> (ττ m i 0) × (ττ n j m)) `row` 1
               | otherwise = ((-1)^(m+n)*) <$> (n,j) ‿ (m,i)
 cup = (‿)
 
--- соотношения между образующими n-й и m-й групп
+-- relations between generators of the n-th and m-th groups
 relations m n = putStrLn $ unlines
     [ row i j | i <- [1 .. length (coHom m)]
               , j <- [1 .. length (coHom n)] ]
@@ -292,6 +293,6 @@ relations m n = putStrLn $ unlines
           show' (1,x) = show x
           show' (k,x) = show k ++ "·" ++ show x
 
--- представление образующих n-й группы через образующие меньшей степени
+-- representation of generators of n-th group using generators of lower degree
 representation n = sequence_ [ relations i (n-i) | i <- [1 .. n `div` 2] ]
 
