@@ -1,3 +1,6 @@
+[![License](https://img.shields.io/badge/license-LGPLv3-blue.svg)](https://www.tldrlegal.com/l/lgpl-3.0)
+[![DOI](https://zenodo.org/badge/doi/10.5281/zenodo.34973.svg)](http://dx.doi.org/10.5281/zenodo.34973)
+
 ## Description
 
 This is a part of my diploma thesis on computaion of integral cohomology algebra of modular 2-groups. This Haskell library offers some basic abstractions and methods for computations in terms of the group algebra `Z[G]` and automatic construction of cocycle traslations for computation of the cup-product.
